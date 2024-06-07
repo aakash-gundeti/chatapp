@@ -6,7 +6,7 @@ const baseUrl = process.env.MONGODB || "0.0.0.0:27017";
 
 export const connectToDatabase = async () => {
   try {
-    await mongoose.connect(`mongodb://${baseUrl}/ChatterApp`, {
+    await mongoose.connect(baseUrl, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
