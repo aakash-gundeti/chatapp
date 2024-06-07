@@ -1,0 +1,23 @@
+<%- include('layouts/header.ejs')%>
+<div class="row align-items-center justify-content-center vh-100">
+    <div class="col-4 text-center">
+        <h1>Login</h1>
+        <% if(typeof message !== 'undefined'){ %>
+        <h4 style="color: red"><%= message %></h4>
+        <% } %>
+        <form action="" method="POST">
+            <input class="form-control mb-3" type="email" name="email" placeholder="Enter Email" required />
+            <input
+                class="form-control mb-3"
+                type="password"
+                name="password"
+                placeholder="Enter Password"
+                required
+            />
+            <input type="submit" value="Login"  class="btn btn-primary w-100 mb-3"/>
+        </form>
+        <a href="/register">Register here</a>
+    </div>
+</div>
+<%- include('layouts/footer.ejs')%>
+

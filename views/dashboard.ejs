@@ -1,0 +1,222 @@
+<%- include('layouts/header.ejs')%>
+
+<div class="d-flex justify-content-between">
+  <h2 class="mb-4">Hii, <%= user.name %></h2>
+  <div>
+    <a href="/logout">Logout</a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-3">
+    <ul class="list-group">
+      <% if(users.length > 0){ 
+					for(let i = 0; i < users.length; i++){ 
+			%>
+      <li
+        class="list-group-item list-group-item-dark cursor-pointer users-list"
+        data-id="<%= users[i]['_id'] %>"
+      >
+        <img
+          src="<%= 'http://localhost:3000/'+users[i].image %>"
+          alt=""
+          width="50"
+          height="50"
+        />
+        <%= users[i].name %> 
+        <% if(users[i]['status'] == 1){ %>
+        <sup class="online-status" id="<%= users[i]['_id'] %>-status">Online</sup>
+        <% }else{ %>
+        <sup class="offline-status" id="<%= users[i]['_id'] %>-status">Offline</sup>
+        <% } %>
+        <div id="<%= users[i]['_id']%>-typing-indicator"></div>
+      </li>
+      <% } 
+				}
+			%>
+    </ul>
+  </div>
+  <div class="col-md-9">
+    <h3 class="start-head">Click to Chat</h3>
+    <div class="chat-section">
+      <div id="chat-container" class="mb-3"></div>
+      <form action="" id="chat-form">
+        <div class="input-group mb-3">
+            <input
+              class="form-control"
+              type="text"
+              name="message"
+              placeholder="Enter Message"
+              class="border"
+              id="message"
+              required
+            />
+            <input type="submit" value="Send" class="btn btn-primary" />
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  const senderId = "<%= user._id %>";
+  const userName = "<%= user.name %>";
+  let receiverId;
+  const socket = io("/user-namespace", {
+    auth: {
+      token: "<%= user._id %>",
+    },
+  });
+
+  $(document).ready(function () {
+    $(".users-list").click(function () {
+      $(".start-head").hide();
+      $(".chat-section").show();
+      receiverId = $(this).data("id");
+
+      socket.emit('getChats',{ senderId:senderId, receiverId: receiverId });
+    });
+  });
+
+  //user status
+
+  socket.on("getOnlineUser", function (data) {
+    $("#" + data.user_id + "-status").text("Online");
+    $("#" + data.user_id + "-status")
+      .removeClass("offline-status")
+      .addClass("online-status");
+  });
+
+  socket.on("getOfflineUser", function (data) {
+    $("#" + data.user_id + "-status").text("Offline");
+    $("#" + data.user_id + "-status")
+      .removeClass("online-status")
+      .addClass("offline-status");
+  });
+
+  //chatting with user
+
+  $("#chat-form").submit(async function (event) {
+    event.preventDefault();
+    const message = $("#message").val();
+
+		$.ajax({
+			url: '/save-chat',
+			type: 'POST',
+			data:{
+					sender_id: senderId,
+					receiver_id: receiverId,
+					message: message,
+			},
+			success: function(response){
+					if(!response.success){
+							alert(response.msg);
+					}else{
+							$('#message').val('');
+							let chat = response.data.message;
+							let html = `
+									<div class="current-user-chat">
+                      <small>`+ userName +`</small>
+											<h5>`+chat+`</h5>
+									</div>
+							`;
+							$("#chat-container").append(html);
+							socket.emit("send-message", response.data);
+              scrollChat();
+					}
+			}
+		})
+    // const query = await fetch("/save-chat", {
+    //   method: "POST",
+    //   headers: {
+    //     Accept: "application/json",
+    //     "Content-Type": "application/json",
+    //   },
+    //   body: JSON.stringify({
+    //     sender_id: senderId,
+    //     receiver_id: receiverId,
+    //     message: message,
+    //   }),
+    // });
+
+    // const response = await query.json();
+    // if (!response.success) {
+    //   alert(response.msg);
+    // } else {
+    //   $("#message").val("");
+    //   let chat = response.data.message;
+    //   let html =
+    //     `<div class="current-user-chat">
+    //       <h5>` + chat + `</h5>
+    //     </div>`;
+    //   $("#chat-container").append(html);
+
+    //   socket.emit("send-message", response.data);
+    // }
+  });
+
+  socket.on("loadNewChat", function ({data, receiver}) {
+    if (senderId === data.receiverId && receiverId === data.senderId) {
+      let html =
+        `<div class="another-user-chat">
+          <small>`+receiver.name+`</small>
+        	<h5>` + data.message + `</h5>
+        </div>`;
+      $("#chat-container").append(html);
+      scrollChat();
+    }
+  });
+
+  socket.on("loadChats", function(data){
+    $("#chat-container").html('');
+    const chats = data.chats;
+
+    let html = ``;
+
+    if(chats.length != 0){
+      for(chat of chats){
+
+        let addClass = '';
+        if(chat.sender._id == senderId){
+          addClass = 'current-user-chat';
+        }else{
+          addClass = 'another-user-chat';
+        }
+        html += `
+          <div class=`+addClass+`>
+            <small>`+ chat.sender.name +`</small>
+            <h5>`+chat.message+`</h5>
+          </div>
+        `
+      }
+      $("#chat-container").append(html);
+
+      scrollChat();
+    }else{
+        console.log('no chats')
+    }
+  });
+
+  $('#message').on('keydown', () => {
+    socket.emit('typing');
+  });
+
+  $('#message').on('blur', () => {
+    socket.emit('stopTyping');
+  });
+
+  socket.on('typingIndicator', (data) => {
+    $(`#${data.userId}-typing-indicator`).text('typing...')
+  });
+
+  socket.on('stopTypingIndicator', (data) => {
+    $(`#${data.userId}-typing-indicator`).text('');
+  });
+  function scrollChat(){
+    $("#chat-container").animate({
+      scrollTop: $("#chat-container").offset().top + $("#chat-container")[0].scrollHeight
+    },0)
+  }
+</script>
+
+<%- include('layouts/footer.ejs')%>
